@@ -1,0 +1,10 @@
+--- wpa_supplicant-0.7.3/src/rsn_supp/pmksa_cache.c	2010-09-07 16:43:39.000000000 +0100
++++ wpa_supplicant-0.7.3_mod/src/rsn_supp/pmksa_cache.c	2011-12-22 12:24:04.679908942 +0000
+@@ -63,6 +63,7 @@
+ 	os_get_time(&now);
+ 	while (pmksa->pmksa && pmksa->pmksa->expiration <= now.sec) {
+ 		struct rsn_pmksa_cache_entry *entry = pmksa->pmksa;
++		wpa_sm_remove_pmkid(pmksa->sm, entry->aa, entry->pmkid);
+ 		pmksa->pmksa = entry->next;
+ 		wpa_printf(MSG_DEBUG, "RSN: expired PMKSA cache entry for "
+ 			   MACSTR, MAC2STR(entry->aa));

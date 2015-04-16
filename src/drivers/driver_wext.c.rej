@@ -1,0 +1,86 @@
+--- wpa_supplicant-0.7.3/src/drivers/driver_wext.c	2010-09-07 16:43:39.000000000 +0100
++++ wpa_supplicant-0.7.3_mod/src/drivers/driver_wext.c	2011-12-22 12:37:00.376098412 +0000
+@@ -399,7 +399,7 @@
+ {
+ 	union wpa_event_data data;
+ 
+-	if (drv->assoc_req_ies == NULL && drv->assoc_resp_ies == NULL)
++	if (drv->assoc_req_ies == NULL && drv->assoc_resp_ies == NULL && drv->scan_gen_ies == NULL)
+ 		return;
+ 
+ 	os_memset(&data, 0, sizeof(data));
+@@ -411,13 +411,54 @@
+ 		data.assoc_info.resp_ies = drv->assoc_resp_ies;
+ 		data.assoc_info.resp_ies_len = drv->assoc_resp_ies_len;
+ 	}
+-
++	if (drv->scan_gen_ies) {
++		data.assoc_info.beacon_ies = drv->scan_gen_ies;
++		data.assoc_info.beacon_ies_len = drv->scan_gen_ies_len;
++	}
++    
+ 	wpa_supplicant_event(drv->ctx, EVENT_ASSOCINFO, &data);
+ 
+ 	os_free(drv->assoc_req_ies);
+ 	drv->assoc_req_ies = NULL;
+ 	os_free(drv->assoc_resp_ies);
+ 	drv->assoc_resp_ies = NULL;
++	os_free(drv->scan_gen_ies);
++	drv->scan_gen_ies = NULL;
++}
++
++static void wpa_driver_wext_update_beacon_ies(struct wpa_driver_wext_data *drv,
++                                              const u8 *bssid)
++{
++    struct wpa_scan_results *scan_res;
++    struct wpa_scan_res *r;
++    int i;
++    const u8 *ie_pos;
++
++    scan_res = wpa_driver_wext_get_scan_results(drv);
++    if (scan_res == NULL) {
++        wpa_printf(MSG_DEBUG, "wpa_driver_wext_update_beacon_ies: failed to get scan results");
++        return;
++    }
++
++    /* Search for the current BSSID */
++    for (i = 0; i < scan_res->num; i++) {
++        r = scan_res->res[i];
++        if (os_memcmp(r->bssid, bssid, ETH_ALEN) != 0)
++            continue;
++
++        ie_pos = (const u8 *) (r + 1);
++
++        wpa_hexdump(MSG_DEBUG, "wpa_driver_wext_update_beacon_ies:", ie_pos,
++                    r->ie_len);
++        os_free(drv->scan_gen_ies);
++        drv->scan_gen_ies = os_malloc(r->ie_len);
++        if (drv->scan_gen_ies == NULL) {
++            drv->scan_gen_ies_len = 0;
++            return;
++        }
++        os_memcpy(drv->scan_gen_ies, ie_pos, r->ie_len);
++        drv->scan_gen_ies_len = r->ie_len;
++    }
+ }
+ 
+ 
+@@ -474,6 +515,7 @@
+ 						     NULL);
+ 			
+ 			} else {
++                wpa_driver_wext_update_beacon_ies(drv, (const u8*)iwe->u.ap_addr.sa_data);
+ 				wpa_driver_wext_event_assoc_ies(drv);
+ 				wpa_supplicant_event(drv->ctx, EVENT_ASSOC,
+ 						     NULL);
+@@ -1044,8 +1086,8 @@
+ 			       struct wext_scan_data *res)
+ {
+ 	res->res.qual = iwe->u.qual.qual;
+-	res->res.noise = iwe->u.qual.noise;
+-	res->res.level = iwe->u.qual.level;
++	res->res.noise = ( iwe->u.qual.noise > 63 ) ? iwe->u.qual.noise - 0x100 : iwe->u.qual.noise;
++	res->res.level = ( iwe->u.qual.level > 63 ) ? iwe->u.qual.level - 0x100 : iwe->u.qual.level;
+ 	if (iwe->u.qual.updated & IW_QUAL_QUAL_INVALID)
+ 		res->res.flags |= WPA_SCAN_QUAL_INVALID;
+ 	if (iwe->u.qual.updated & IW_QUAL_LEVEL_INVALID)
